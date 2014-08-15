@@ -1,6 +1,7 @@
 	<h1>{{ .Session.Values.username }}&nbsp;&nbsp;<small>({{ .Session.Values.username }})</small></h1>
 	<form id="filter" action="" method="post">
 		<label class="control-label" for="keys">SSH Public Keys</label>
+		<a href="{{ GetURL "userkeys" "username" .Session.Values.username}}" class="btn btn-info btn-xs" role="button">View Plain Text Keys</a>
 		<textarea class="form-control" id="keys" name="keys" rows="10" wrap="soft">{{ .Keys }}</textarea>
 		<br>
 		<button class="btn btn-primary">Update</button>
