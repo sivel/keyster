@@ -333,14 +333,14 @@ func (h *Handler) UserPostHandler(w http.ResponseWriter, req *http.Request) {
 		c.Find(bson.M{"_id": bson.M{"$nin": current}}).All(&expired)
 		c.Update(bson.M{"_id": bson.M{"$nin": current}}, bson.M{"$set": bson.M{"expired": true}})
 		for _, e := range expired {
-			session.AddFlash(fmt.Sprintf("Marked as Expired: %s", KeyFingerprint(e.Key)), "info")
+			session.AddFlash(fmt.Sprintf("Marked as Expired: %s", e.Id), "info")
 		}
 	} else {
 		var expired []UserKey
 		c.Find(bson.M{"expired": false}).All(&expired)
 		c.Update(bson.M{"expired": false}, bson.M{"$set": bson.M{"expired": true}})
 		for _, e := range expired {
-			session.AddFlash(fmt.Sprintf("Marked as Expired: %s", KeyFingerprint(e.Key)), "info")
+			session.AddFlash(fmt.Sprintf("Marked as Expired: %s", e.Id), "info")
 		}
 	}
 	session.Save(req, w)
