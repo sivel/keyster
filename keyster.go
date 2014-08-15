@@ -95,6 +95,25 @@ type Handler struct {
 	KeyDuration time.Duration
 }
 
+func (h *Handler) GetCurrentUserKeys(username string) []string {
+	mongo := h.Mongo.Copy()
+	defer mongo.Close()
+
+	c := mongo.DB("keyster").C("keys")
+
+	var keys []UserKey
+	var keysOut []string
+
+	c.Find(bson.M{"username": username}).All(&keys)
+	for _, key := range keys {
+		if !key.IsExpired(h.KeyDuration, true) {
+			keysOut = append(keysOut, key.Key)
+		}
+	}
+
+	return keysOut
+}
+
 func (h *Handler) GetURL(name string, params ...interface{}) string {
 	var vars []string
 	for _, param := range params {
@@ -173,8 +192,14 @@ func (h *Handler) LoginPostHandler(w http.ResponseWriter, req *http.Request) {
 	return
 }
 
+func (h *Handler) UserKeysHandler(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	keysOut := h.GetCurrentUserKeys(vars["username"])
+	w.Header().Set("Content-Type", "text/plain")
+	w.Write([]byte(fmt.Sprintf("%s\n", strings.Join(keysOut, "\n"))))
+}
+
 func (h *Handler) UserHandler(w http.ResponseWriter, req *http.Request) {
-	//var Keys string
 	vars := mux.Vars(req)
 	session, _ := h.Session.Get(req, "session")
 	username, ok := session.Values["username"].(string)
@@ -193,20 +218,7 @@ func (h *Handler) UserHandler(w http.ResponseWriter, req *http.Request) {
 		http.Redirect(w, req, url.String(), 301)
 	}
 
-	mongo := h.Mongo.Copy()
-	defer mongo.Close()
-
-	c := mongo.DB("keyster").C("keys")
-
-	var keys []UserKey
-	var keysOut []string
-
-	c.Find(bson.M{"username": username}).All(&keys)
-	for _, key := range keys {
-		if !key.IsExpired(h.KeyDuration, true) {
-			keysOut = append(keysOut, key.Key)
-		}
-	}
+	keysOut := h.GetCurrentUserKeys(username)
 
 	/*if username != ctx.Session.Get("username") {
 		context["Page"] = username
@@ -402,7 +414,7 @@ func main() {
 
 	router.HandleFunc("/users/{username}", h.UserHandler).Methods("GET").Name("user")
 	router.HandleFunc("/users/{username}", h.UserPostHandler).Methods("POST")
-	//router.HandleFunc("/users/{username}/keys", h.UserKeysHandler).Name("userkeys")
+	router.HandleFunc("/users/{username}/keys", h.UserKeysHandler).Name("userkeys")
 
 	http.Handle("/", loggingHandler)
 
