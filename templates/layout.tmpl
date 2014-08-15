@@ -53,14 +53,14 @@
 						<span class="icon-bar"></span>
 						<span class="icon-bar"></span>
 					</button>
-					<a class="navbar-brand" href="/">Keyster</a>
+					<a class="navbar-brand" href="{{ GetURL "index" }}">Keyster</a>
 				</div>
 				<div class="navbar-collapse collapse">
 					<p class="navbar-text navbar-right">
 {{ if .Session.Values.username }}
-							Logged in as <a class="navbar-link" href="/users/{{ .Session.Values.username }}">{{ .Session.Values.username }}</a> | <a class="navbar-link" href="/logout/">Log Out</a>
+							Logged in as <a class="navbar-link" href="{{ GetURL "user" "username" .Session.Values.username }}">{{ .Session.Values.username }}</a> | <a class="navbar-link" href="{{ GetURL "logout" }}">Log Out</a>
 {{ else }}
-							<a class="navbar-link" href="/login/">Log In</a>
+							<a class="navbar-link" href="{{ GetURL "login" }}">Log In</a>
 {{ end }}
 					</p>
 				</div>
