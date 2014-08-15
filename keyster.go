@@ -167,7 +167,12 @@ func (h *Handler) LoginHandler(w http.ResponseWriter, req *http.Request) {
 		http.Redirect(w, req, url.String(), 302)
 		return
 	}
-	h.Render.HTML(w, http.StatusOK, "login", map[string]interface{}{"Page": "Log In", "Session": session, "Flashes": h.GetFlashes(w, req)})
+	context := map[string]interface{}{
+		"Page":    "Log In",
+		"Session": session,
+		"Flashes": h.GetFlashes(w, req),
+	}
+	h.Render.HTML(w, http.StatusOK, "login", context)
 	return
 }
 
