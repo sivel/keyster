@@ -106,6 +106,7 @@ type Handler struct {
 	LDAP    struct {
 		Server string
 		BindDN string
+		SSL    bool
 	}
 	KeyDuration time.Duration
 }
@@ -177,6 +178,8 @@ func (h *Handler) LoginHandler(w http.ResponseWriter, req *http.Request) {
 }
 
 func (h *Handler) LoginPostHandler(w http.ResponseWriter, req *http.Request) {
+	var l *ldap.Conn
+	var err error
 	session, _ := h.Session.Get(req, "session")
 
 	loginForm := new(LoginForm)
@@ -184,7 +187,11 @@ func (h *Handler) LoginPostHandler(w http.ResponseWriter, req *http.Request) {
 
 	loginURL, _ := h.Router.Get("login").URL()
 
-	l, err := ldap.DialTLS("tcp", h.LDAP.Server, nil)
+	if h.LDAP.SSL {
+		l, err = ldap.DialTLS("tcp", h.LDAP.Server, nil)
+	} else {
+		l, err = ldap.Dial("tcp", h.LDAP.Server)
+	}
 	if err != nil {
 		session.AddFlash("Failure communicating with LDAP server", "danger")
 		session.Save(req, w)
@@ -365,6 +372,7 @@ func main() {
 	var Key string
 	var LDAPServer string
 	var LDAPBindDN string
+	var LDAPSSL bool
 	var KeyDuration string
 	var LogFile string
 	var logFile *os.File
@@ -415,6 +423,7 @@ func main() {
 	h.Render = r
 	h.LDAP.Server = LDAPServer
 	h.LDAP.BindDN = LDAPBindDN
+	h.LDAP.SSL = LDAPSSL
 
 	if LogFile == "-" {
 		logFile = os.Stdout
