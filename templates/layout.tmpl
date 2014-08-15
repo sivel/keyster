@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<title>{{ if .Page }}{{ .Page }} - {{ end }}Keyster</title>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css">
+		<style>
+			body {padding-top: 70px;}
+		</style>
+		<link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap-theme.min.css">
+		<style>
+			.jumbotron {
+				margin-top: 30px;
+				text-align: center;
+			}
+			.failure {
+				max-width: 300px;
+				margin: 0 auto 20px;
+				padding-left: 19px;
+				padding-right: 19px;
+				text-align: center;
+				font-size: 16px;
+			}
+			.form-signin {
+				max-width: 300px;
+				margin: 0 auto 20px;
+			}
+			.form-signin-heading {
+				text-align: center;
+				margin-top: 0;
+				margin-bottom: 15px;
+			}
+			.form-signin input[type="text"],
+			.form-signin input[type="password"] {
+				font-size: 16px;
+				height: auto;
+				width: 100%;
+				margin-bottom: 15px;
+				padding: 7px 9px;
+			}
+			.alert {
+				text-align: center;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="navbar navbar-inverse navbar-fixed-top">
+			<div class="container">
+				<div class="navbar-header">
+					<button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+						<span class="icon-bar"></span>
+						<span class="icon-bar"></span>
+						<span class="icon-bar"></span>
+					</button>
+					<a class="navbar-brand" href="/">Keyster</a>
+				</div>
+				<div class="navbar-collapse collapse">
+					<p class="navbar-text navbar-right">
+{{ if .Session.Values.username }}
+							Logged in as <a class="navbar-link" href="/users/{{ .Session.Values.username }}">{{ .Session.Values.username }}</a> | <a class="navbar-link" href="/logout/">Log Out</a>
+{{ else }}
+							<a class="navbar-link" href="/login/">Log In</a>
+{{ end }}
+					</p>
+				</div>
+			</div>
+		</div>
+		<div class="container">
+			{{ range $type, $flashes := .Flashes }}
+			{{ range $flashes }}
+			<div class="alert alert-{{ $type }} alert-dismissible" role="alert">
+				<button type="button" class="close" data-dismiss="alert"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+				<strong>{{ Title $type }}!</strong> {{.}}
+			</div>
+			{{ end }}
+			{{ end }}
+{{ yield }}
+		</div>
+		<script src="//cdnjs.cloudflare.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
+		<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/js/bootstrap.min.js"></script>
+		<script type="text/javascript">
+			$("#username").focus();
+		</script>
+	</body>
+</html>
