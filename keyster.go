@@ -371,12 +371,12 @@ func main() {
 		log.Fatal(err)
 	}
 
-	flag.StringVar(&Port, "port", ":3000", "")
-	flag.StringVar(&Cert, "cert", "", "")
-	flag.StringVar(&Key, "key", "", "")
+	flag.StringVar(&Port, "port", ":3000", "HOST:PORT to listen on, HOST not required to listen on all addresses")
+	flag.StringVar(&Cert, "cert", "", "SSL cert file path. This option with 'key' enables SSL communication")
+	flag.StringVar(&Key, "key", "", "SSL key file path. This option with 'cert' enables SSL communication")
 	flag.StringVar(&LDAPServer, "ldap-server", "", "")
 	flag.StringVar(&LDAPBindDN, "ldap-bind-dn", "", "")
-	flag.StringVar(&KeyDuration, "key-duration", "", "")
+	flag.StringVar(&KeyDuration, "key-duration", "0", "Duration of key validity. 0 disables expiration. See http://golang.org/pkg/time/#ParseDuration")
 	flag.StringVar(&LogFile, "log-file", "-", "Log file path. Use - for stdout")
 	flag.Parse()
 
