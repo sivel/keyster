@@ -385,13 +385,14 @@ func main() {
 	flag.StringVar(&Port, "port", ":3000", "HOST:PORT to listen on, HOST not required to listen on all addresses")
 	flag.StringVar(&Cert, "cert", "", "SSL cert file path. This option with 'key' enables SSL communication")
 	flag.StringVar(&Key, "key", "", "SSL key file path. This option with 'cert' enables SSL communication")
-	flag.StringVar(&LDAPServer, "ldap-server", "", "")
-	flag.StringVar(&LDAPBindDN, "ldap-bind-dn", "", "")
+	flag.StringVar(&LDAPServer, "ldap-server", "", "LDAP server HOST:PORT")
+	flag.StringVar(&LDAPBindDN, "ldap-bind-dn", "", "Base DN of users")
+	flag.BoolVar(&LDAPSSL, "ldap-ssl", false, "Use SSL or TLS for connectivity to the LDAP server")
 	flag.StringVar(&KeyDuration, "key-duration", "0", "Duration of key validity. 0 disables expiration. See http://golang.org/pkg/time/#ParseDuration")
 	flag.StringVar(&LogFile, "log-file", "-", "Log file path. Use - for stdout")
 	flag.Parse()
 
-	router := mux.NewRouter()
+	router := mux.NewRouter().StrictSlash(true)
 
 	file, _ := os.Open("/dev/urandom")
 	secret := make([]byte, 24)
@@ -440,9 +441,9 @@ func main() {
 	loggingHandler := handlers.CombinedLoggingHandler(logFile, router)
 
 	router.HandleFunc("/", h.IndexHandler).Name("index")
-	router.HandleFunc("/login/", h.LoginHandler).Methods("GET").Name("login")
-	router.HandleFunc("/login/", h.LoginPostHandler).Methods("POST")
-	router.HandleFunc("/logout/", h.LogoutHandler).Name("logout")
+	router.HandleFunc("/login", h.LoginHandler).Methods("GET").Name("login")
+	router.HandleFunc("/login", h.LoginPostHandler).Methods("POST")
+	router.HandleFunc("/logout", h.LogoutHandler).Name("logout")
 
 	router.HandleFunc("/users/{username}", h.UserHandler).Methods("GET").Name("user")
 	router.HandleFunc("/users/{username}", h.UserPostHandler).Methods("POST")
