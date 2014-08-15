@@ -220,6 +220,8 @@ func (h *Handler) UserKeysHandler(w http.ResponseWriter, req *http.Request) {
 }
 
 func (h *Handler) UserHandler(w http.ResponseWriter, req *http.Request) {
+	var readOnly bool = false
+
 	vars := mux.Vars(req)
 	session, _ := h.Session.Get(req, "session")
 	username, ok := session.Values["username"].(string)
@@ -234,22 +236,23 @@ func (h *Handler) UserHandler(w http.ResponseWriter, req *http.Request) {
 		ctx.r.Redirect(fmt.Sprintf("/user/%s", ctx.Session.Get("username")))
 	}*/
 	if reqUsername != username {
-		url, _ := h.Router.Get("user").URL("username", username)
-		http.Redirect(w, req, url.String(), 301)
+		readOnly = true
+		username = reqUsername
 	}
 
 	keysOut := h.GetCurrentUserKeys(username)
 
-	/*if username != ctx.Session.Get("username") {
-		context["Page"] = username
+	context := map[string]interface{}{
+		"Session":  session,
+		"Flashes":  h.GetFlashes(w, req),
+		"Keys":     strings.Join(keysOut, "\n"),
+		"ReadOnly": readOnly,
+		"Username": username,
+	}
+	if readOnly {
+		context["Page"] = reqUsername
 	} else {
 		context["Page"] = "My Profile"
-	}*/
-	context := map[string]interface{}{
-		"Page":    "My Profile",
-		"Session": session,
-		"Flashes": h.GetFlashes(w, req),
-		"Keys":    strings.Join(keysOut, "\n"),
 	}
 	h.Render.HTML(w, http.StatusOK, "user", context)
 }
