@@ -91,7 +91,7 @@ type UserKey struct {
 
 func (u *UserKey) IsExpired(delta time.Duration, includeManual bool) bool {
 	expireTime := u.Timestamp.Add(delta)
-	if expireTime.Before(time.Now().UTC()) || (includeManual && u.Expired) {
+	if (delta != 0 && expireTime.Before(time.Now().UTC())) || (includeManual && u.Expired) {
 		return true
 	} else {
 		return false
