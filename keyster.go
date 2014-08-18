@@ -82,16 +82,16 @@ func (u *UserForm) FieldMap() binding.FieldMap {
 }
 
 type UserKey struct {
-	Id        string `bson:"_id"`
-	Username  string
-	Timestamp time.Time
-	Key       string
-	Expired   bool
+	Id          string `bson:"_id"`
+	Username    string
+	Timestamp   time.Time
+	Key         string
+	Deactivated bool
 }
 
-func (u *UserKey) IsExpired(delta time.Duration, includeManual bool) bool {
+func (u *UserKey) IsExpired(delta time.Duration, includeDeactivated bool) bool {
 	expireTime := u.Timestamp.Add(delta)
-	if (delta != 0 && expireTime.Before(time.Now().UTC())) || (includeManual && u.Expired) {
+	if (delta != 0 && expireTime.Before(time.Now().UTC())) || (includeDeactivated && u.Deactivated) {
 		return true
 	} else {
 		return false
@@ -300,14 +300,14 @@ func (h *Handler) UserPostHandler(w http.ResponseWriter, req *http.Request) {
 			if err == nil {
 				fingerprint = KeyFingerprint(out.Marshal())
 
-				err = c.Find(bson.M{"_id": fingerprint}).One(&key)
+				err = c.Find(bson.M{"_id": fingerprint, "username": username}).One(&key)
 				if err == nil && key.IsExpired(h.KeyDuration, false) {
 					session.AddFlash(fmt.Sprintf("Key already used and expired: %s", fingerprint), "danger")
 					continue
 				} else if err == nil {
 					_, testComment, _, _, _ := ssh.ParseAuthorizedKey([]byte(key.Key))
-					if comment != testComment || key.Expired == true {
-						err := c.Update(bson.M{"_id": fingerprint}, bson.M{"$set": bson.M{"key": value, "expired": false}})
+					if comment != testComment || key.Deactivated == true {
+						err := c.Update(bson.M{"_id": fingerprint}, bson.M{"$set": bson.M{"key": value, "deactivated": false}})
 						if err != nil {
 							session.AddFlash(fmt.Sprintf("Error updating key: %s", fingerprint), "danger")
 						} else {
@@ -319,11 +319,11 @@ func (h *Handler) UserPostHandler(w http.ResponseWriter, req *http.Request) {
 				}
 
 				err := c.Insert(UserKey{
-					Id:        fingerprint,
-					Username:  username,
-					Timestamp: time.Now().UTC(),
-					Key:       strings.TrimSpace(fmt.Sprintf("%s %s %s", out.Type(), base64.StdEncoding.EncodeToString(out.Marshal()), comment)),
-					Expired:   false,
+					Id:          fingerprint,
+					Username:    username,
+					Timestamp:   time.Now().UTC(),
+					Key:         strings.TrimSpace(fmt.Sprintf("%s %s %s", out.Type(), base64.StdEncoding.EncodeToString(out.Marshal()), comment)),
+					Deactivated: false,
 				})
 				if mgo.IsDup(err) {
 					session.AddFlash(fmt.Sprintf("Duplicate SSH key submitted: %s", fingerprint), "warning")
@@ -338,21 +338,20 @@ func (h *Handler) UserPostHandler(w http.ResponseWriter, req *http.Request) {
 			}
 		}
 	}
+
+	var notDeactivatedUserKeys []UserKey
 	if len(current) > 0 {
-		var expired []UserKey
-		c.Find(bson.M{"_id": bson.M{"$nin": current}}).All(&expired)
-		c.Update(bson.M{"_id": bson.M{"$nin": current}}, bson.M{"$set": bson.M{"expired": true}})
-		for _, e := range expired {
-			session.AddFlash(fmt.Sprintf("Marked as Expired: %s", e.Id), "info")
-		}
+		c.Find(bson.M{"_id": bson.M{"$nin": current}, "username": username, "deactivated": false}).All(&notDeactivatedUserKeys)
 	} else {
-		var expired []UserKey
-		c.Find(bson.M{"expired": false}).All(&expired)
-		c.Update(bson.M{"expired": false}, bson.M{"$set": bson.M{"expired": true}})
-		for _, e := range expired {
-			session.AddFlash(fmt.Sprintf("Marked as Expired: %s", e.Id), "info")
+		c.Find(bson.M{"deactivated": false, "username": username}).All(&notDeactivatedUserKeys)
+	}
+	for _, key := range notDeactivatedUserKeys {
+		if !key.IsExpired(h.KeyDuration, false) {
+			c.Update(bson.M{"_id": key.Id}, bson.M{"$set": bson.M{"deactivated": true}})
+			session.AddFlash(fmt.Sprintf("Deactivated key: %s", key.Id), "info")
 		}
 	}
+
 	session.Save(req, w)
 	url, _ := h.Router.Get("user").URL("username", username)
 	http.Redirect(w, req, url.String(), 301)
