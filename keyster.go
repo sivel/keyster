@@ -307,7 +307,12 @@ func (h *Handler) UserPostHandler(w http.ResponseWriter, req *http.Request) {
 				} else if err == nil {
 					_, testComment, _, _, _ := ssh.ParseAuthorizedKey([]byte(key.Key))
 					if comment != testComment || key.Deactivated == true {
-						err := c.Update(bson.M{"_id": fingerprint}, bson.M{"$set": bson.M{"key": value, "deactivated": false}})
+						err := c.Update(bson.M{"_id": fingerprint}, bson.M{
+							"$set": bson.M{
+								"key":         strings.TrimSpace(fmt.Sprintf("%s %s %s", out.Type(), base64.StdEncoding.EncodeToString(out.Marshal()), comment)),
+								"deactivated": false,
+							},
+						})
 						if err != nil {
 							session.AddFlash(fmt.Sprintf("Error updating key: %s", fingerprint), "danger")
 						} else {
