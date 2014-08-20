@@ -108,7 +108,10 @@ type Handler struct {
 		BindDN string
 		SSL    bool
 	}
-	KeyDuration time.Duration
+	Key struct {
+		Duration     time.Duration
+		AllowOptions bool
+	}
 }
 
 func (h *Handler) GetCurrentUserKeys(username string) []string {
@@ -122,7 +125,7 @@ func (h *Handler) GetCurrentUserKeys(username string) []string {
 
 	c.Find(bson.M{"username": username}).All(&keys)
 	for _, key := range keys {
-		if !key.IsExpired(h.KeyDuration, true) {
+		if !key.IsExpired(h.Key.Duration, true) {
 			keysOut = append(keysOut, key.Key)
 		}
 	}
@@ -296,20 +299,28 @@ func (h *Handler) UserPostHandler(w http.ResponseWriter, req *http.Request) {
 			if strings.TrimSpace(value) == "" {
 				continue
 			}
-			out, comment, _, _, err := ssh.ParseAuthorizedKey([]byte(value))
+			out, comment, options, _, err := ssh.ParseAuthorizedKey([]byte(value))
 			if err == nil {
+				var keyString string
+				if h.Key.AllowOptions {
+					keyString = strings.TrimSpace(fmt.Sprintf("%s %s %s %s", strings.Join(options, ","), out.Type(), base64.StdEncoding.EncodeToString(out.Marshal()), comment))
+				} else {
+					options = make([]string, 0)
+					keyString = strings.TrimSpace(fmt.Sprintf("%s %s %s", out.Type(), base64.StdEncoding.EncodeToString(out.Marshal()), comment))
+
+				}
 				fingerprint = KeyFingerprint(out.Marshal())
 
 				err = c.Find(bson.M{"_id": fingerprint, "username": username}).One(&key)
-				if err == nil && key.IsExpired(h.KeyDuration, false) {
+				if err == nil && key.IsExpired(h.Key.Duration, false) {
 					session.AddFlash(fmt.Sprintf("Key already used and expired: %s", fingerprint), "danger")
 					continue
 				} else if err == nil {
-					_, testComment, _, _, _ := ssh.ParseAuthorizedKey([]byte(key.Key))
-					if comment != testComment || key.Deactivated == true {
+					_, testComment, testOptions, _, _ := ssh.ParseAuthorizedKey([]byte(key.Key))
+					if comment != testComment || strings.Join(options, ",") != strings.Join(testOptions, ",") || key.Deactivated == true {
 						err := c.Update(bson.M{"_id": fingerprint}, bson.M{
 							"$set": bson.M{
-								"key":         strings.TrimSpace(fmt.Sprintf("%s %s %s", out.Type(), base64.StdEncoding.EncodeToString(out.Marshal()), comment)),
+								"key":         keyString,
 								"deactivated": false,
 							},
 						})
@@ -327,7 +338,7 @@ func (h *Handler) UserPostHandler(w http.ResponseWriter, req *http.Request) {
 					Id:          fingerprint,
 					Username:    username,
 					Timestamp:   time.Now().UTC(),
-					Key:         strings.TrimSpace(fmt.Sprintf("%s %s %s", out.Type(), base64.StdEncoding.EncodeToString(out.Marshal()), comment)),
+					Key:         keyString,
 					Deactivated: false,
 				})
 				if mgo.IsDup(err) {
@@ -351,7 +362,7 @@ func (h *Handler) UserPostHandler(w http.ResponseWriter, req *http.Request) {
 		c.Find(bson.M{"deactivated": false, "username": username}).All(&notDeactivatedUserKeys)
 	}
 	for _, key := range notDeactivatedUserKeys {
-		if !key.IsExpired(h.KeyDuration, false) {
+		if !key.IsExpired(h.Key.Duration, false) {
 			c.Update(bson.M{"_id": key.Id}, bson.M{"$set": bson.M{"deactivated": true}})
 			session.AddFlash(fmt.Sprintf("Deactivated key: %s", key.Id), "info")
 		}
@@ -378,6 +389,7 @@ func main() {
 	var LDAPBindDN string
 	var LDAPSSL bool
 	var KeyDuration string
+	var KeyAllowOptions bool
 	var LogFile string
 	var logFile *os.File
 
@@ -393,6 +405,7 @@ func main() {
 	flag.StringVar(&LDAPBindDN, "ldap-bind-dn", "", "Base DN of users")
 	flag.BoolVar(&LDAPSSL, "ldap-ssl", false, "Use SSL or TLS for connectivity to the LDAP server")
 	flag.StringVar(&KeyDuration, "key-duration", "0", "Duration of key validity. 0 disables expiration. See http://golang.org/pkg/time/#ParseDuration")
+	flag.BoolVar(&KeyAllowOptions, "key-allow-options", false, "Whether keys are allowed to contain options")
 	flag.StringVar(&LogFile, "log-file", "-", "Log file path. Use - for stdout")
 	flag.Parse()
 
@@ -409,10 +422,10 @@ func main() {
 	}
 
 	h := Handler{
-		Router:      router,
-		Session:     sessions.NewCookieStore(secret),
-		Mongo:       mongo,
-		KeyDuration: keyDuration,
+		Router:  router,
+		Session: sessions.NewCookieStore(secret),
+		Mongo:   mongo,
+		//		KeyDuration: keyDuration,
 	}
 
 	r := render.New(render.Options{
@@ -429,6 +442,8 @@ func main() {
 	h.LDAP.Server = LDAPServer
 	h.LDAP.BindDN = LDAPBindDN
 	h.LDAP.SSL = LDAPSSL
+	h.Key.Duration = keyDuration
+	h.Key.AllowOptions = KeyAllowOptions
 
 	if LogFile == "-" {
 		logFile = os.Stdout
