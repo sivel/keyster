@@ -23,7 +23,7 @@ curl -sf http://keyserver.example.org:3000/users/$1/keys
 
 Name this file something like `/usr/local/bin/userkeys.sh` and make it executable: `chmod a+x /usr/local/bin/userkeys.sh`
 
-Now add the following to your `/etc/sshd/sshd\_config` file:
+Now add the following to your `/etc/sshd/sshd_config` file:
 
 ```
 AuthorizedKeysCommand      /usr/local/bin/userkeys.sh
