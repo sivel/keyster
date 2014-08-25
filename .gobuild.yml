@@ -1,0 +1,7 @@
+filesets:
+    includes:
+        - templates
+        - LICENSE
+        - README.md
+    excludes:
+        - \.git
