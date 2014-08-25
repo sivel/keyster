@@ -105,7 +105,7 @@ type Handler struct {
 	Session *sessions.CookieStore
 	LDAP    struct {
 		Server string
-		BindDN string
+		BaseDN string
 		SSL    bool
 	}
 	Key struct {
@@ -202,7 +202,7 @@ func (h *Handler) LoginPostHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	defer l.Close()
-	err = l.Bind(fmt.Sprintf("cn=%s,%s", loginForm.Username, h.LDAP.BindDN), loginForm.Password)
+	err = l.Bind(fmt.Sprintf("cn=%s,%s", loginForm.Username, h.LDAP.BaseDN), loginForm.Password)
 	if err != nil {
 		session.AddFlash("Log In Failure", "danger")
 		session.Save(req, w)
@@ -386,7 +386,7 @@ func main() {
 	var Cert string
 	var Key string
 	var LDAPServer string
-	var LDAPBindDN string
+	var LDAPBaseDN string
 	var LDAPSSL bool
 	var KeyDuration string
 	var KeyAllowOptions bool
@@ -402,7 +402,7 @@ func main() {
 	flag.StringVar(&Cert, "cert", "", "SSL cert file path. This option with 'key' enables SSL communication")
 	flag.StringVar(&Key, "key", "", "SSL key file path. This option with 'cert' enables SSL communication")
 	flag.StringVar(&LDAPServer, "ldap-server", "", "LDAP server HOST:PORT")
-	flag.StringVar(&LDAPBindDN, "ldap-bind-dn", "", "Base DN of users")
+	flag.StringVar(&LDAPBaseDN, "ldap-base-dn", "", "Base DN of users")
 	flag.BoolVar(&LDAPSSL, "ldap-ssl", false, "Use SSL or TLS for connectivity to the LDAP server")
 	flag.StringVar(&KeyDuration, "key-duration", "0", "Duration of key validity. 0 disables expiration. See http://golang.org/pkg/time/#ParseDuration")
 	flag.BoolVar(&KeyAllowOptions, "key-allow-options", false, "Whether keys are allowed to contain options")
@@ -425,7 +425,6 @@ func main() {
 		Router:  router,
 		Session: sessions.NewCookieStore(secret),
 		Mongo:   mongo,
-		//		KeyDuration: keyDuration,
 	}
 
 	r := render.New(render.Options{
@@ -440,7 +439,7 @@ func main() {
 
 	h.Render = r
 	h.LDAP.Server = LDAPServer
-	h.LDAP.BindDN = LDAPBindDN
+	h.LDAP.BaseDN = LDAPBaseDN
 	h.LDAP.SSL = LDAPSSL
 	h.Key.Duration = keyDuration
 	h.Key.AllowOptions = KeyAllowOptions
