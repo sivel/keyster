@@ -81,11 +81,28 @@ func (u *UserForm) FieldMap() binding.FieldMap {
 	}
 }
 
+type Key struct {
+	Type    string
+	Key     string
+	Options []string
+	Comment string
+}
+
+func (k *Key) String(withOptions bool) string {
+	var keyString string
+	if withOptions {
+		keyString = fmt.Sprintf("%s %s %s %s", strings.Join(k.Options, ","), k.Type, k.Key, k.Comment)
+	} else {
+		keyString = fmt.Sprintf("%s %s %s", k.Type, k.Key, k.Comment)
+	}
+	return strings.TrimSpace(keyString)
+}
+
 type UserKey struct {
 	Id          string `bson:"_id"`
 	Username    string
 	Timestamp   time.Time
-	Key         string
+	Key         Key
 	Deactivated bool
 }
 
@@ -114,7 +131,7 @@ type Handler struct {
 	}
 }
 
-func (h *Handler) GetCurrentUserKeys(username string) []string {
+func (h *Handler) GetCurrentUserKeys(username string, displayKeyOptions bool) []string {
 	mongo := h.Mongo.Copy()
 	defer mongo.Close()
 
@@ -122,14 +139,16 @@ func (h *Handler) GetCurrentUserKeys(username string) []string {
 
 	var keys []UserKey
 	var keysOut []string
+	var keyString string
 
 	c.Find(bson.M{"username": username}).All(&keys)
+
 	for _, key := range keys {
 		if !key.IsExpired(h.Key.Duration, true) {
-			keysOut = append(keysOut, key.Key)
+			keyString = key.Key.String(h.Key.AllowOptions || displayKeyOptions)
+			keysOut = append(keysOut, keyString)
 		}
 	}
-
 	return keysOut
 }
 
@@ -224,7 +243,7 @@ func (h *Handler) LoginPostHandler(w http.ResponseWriter, req *http.Request) {
 
 func (h *Handler) UserKeysHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
-	keysOut := h.GetCurrentUserKeys(vars["username"])
+	keysOut := h.GetCurrentUserKeys(vars["username"], false)
 	w.Header().Set("Content-Type", "text/plain")
 	w.Write([]byte(fmt.Sprintf("%s\n", strings.Join(keysOut, "\n"))))
 }
@@ -250,7 +269,7 @@ func (h *Handler) UserHandler(w http.ResponseWriter, req *http.Request) {
 		username = reqUsername
 	}
 
-	keysOut := h.GetCurrentUserKeys(username)
+	keysOut := h.GetCurrentUserKeys(username, true)
 
 	context := map[string]interface{}{
 		"Session":  session,
@@ -270,7 +289,8 @@ func (h *Handler) UserHandler(w http.ResponseWriter, req *http.Request) {
 func (h *Handler) UserPostHandler(w http.ResponseWriter, req *http.Request) {
 	var fingerprint string
 	var current []string
-	var key UserKey
+	var userKey UserKey
+	var key Key
 	//vars := mux.Vars(req)
 
 	userForm := new(UserForm)
@@ -301,26 +321,24 @@ func (h *Handler) UserPostHandler(w http.ResponseWriter, req *http.Request) {
 			}
 			out, comment, options, _, err := ssh.ParseAuthorizedKey([]byte(value))
 			if err == nil {
-				var keyString string
-				if h.Key.AllowOptions {
-					keyString = strings.TrimSpace(fmt.Sprintf("%s %s %s %s", strings.Join(options, ","), out.Type(), base64.StdEncoding.EncodeToString(out.Marshal()), comment))
-				} else {
-					options = make([]string, 0)
-					keyString = strings.TrimSpace(fmt.Sprintf("%s %s %s", out.Type(), base64.StdEncoding.EncodeToString(out.Marshal()), comment))
-
+				key = Key{
+					Type:    out.Type(),
+					Key:     base64.StdEncoding.EncodeToString(out.Marshal()),
+					Comment: comment,
+					Options: options,
 				}
+
 				fingerprint = KeyFingerprint(out.Marshal())
 
-				err = c.Find(bson.M{"_id": fingerprint, "username": username}).One(&key)
-				if err == nil && key.IsExpired(h.Key.Duration, false) {
+				err = c.Find(bson.M{"_id": fingerprint, "username": username}).One(&userKey)
+				if err == nil && userKey.IsExpired(h.Key.Duration, false) {
 					session.AddFlash(fmt.Sprintf("Key already used and expired: %s", fingerprint), "danger")
 					continue
 				} else if err == nil {
-					_, testComment, testOptions, _, _ := ssh.ParseAuthorizedKey([]byte(key.Key))
-					if comment != testComment || strings.Join(options, ",") != strings.Join(testOptions, ",") || key.Deactivated == true {
+					if key.Comment != userKey.Key.Comment || strings.Join(key.Options, ",") != strings.Join(userKey.Key.Options, ",") || userKey.Deactivated == true {
 						err := c.Update(bson.M{"_id": fingerprint}, bson.M{
 							"$set": bson.M{
-								"key":         keyString,
+								"key":         key,
 								"deactivated": false,
 							},
 						})
@@ -338,7 +356,7 @@ func (h *Handler) UserPostHandler(w http.ResponseWriter, req *http.Request) {
 					Id:          fingerprint,
 					Username:    username,
 					Timestamp:   time.Now().UTC(),
-					Key:         keyString,
+					Key:         key,
 					Deactivated: false,
 				})
 				if mgo.IsDup(err) {
