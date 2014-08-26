@@ -38,9 +38,15 @@ key:
 
 Arguments provided on the command line will override the configuration file. Keep in mind that `-ldap-ssl` and `-key-allow-options` work slightly different, in that they must be supplied to enable the functionality. Not providing them will not disable their respective functionality if explicitly enabled in the configuration file.
 
+### Secret
+
+The `secret` option of `server` allows you to provide a string to be used in authenticating the user sessions. If not provided, each time keyster starts, a new secret will be generated, invalidating user sessions.
+
+It is recommended that you define a secret if you are using multiple servers, otherwise the individual servers will be unable to uthenticate user sessions.
+
 ## Usage with AuthorizedKeysCommand
 
-The `AuthorizedKeysCommand` expects an executable that takes a single argument, which is the username to retrieve the keys for.  An example executable may look like:
+The `AuthorizedKeysCommand` expects an executable that takes a single argument, which is the username to retrieve the keys for. An example executable may look like:
 
 ```bash
 #!/bin/bash

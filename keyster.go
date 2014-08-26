@@ -40,6 +40,7 @@ import (
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
+	"github.com/gorilla/securecookie"
 	"github.com/gorilla/sessions"
 	"github.com/mholt/binding"
 	"github.com/unrolled/render"
@@ -474,10 +475,7 @@ func main() {
 
 	var secret []byte
 	if config.Server.Secret == "" {
-		file, _ := os.Open("/dev/urandom")
-		secret = make([]byte, 24)
-		file.Read(secret)
-		file.Close()
+		secret = securecookie.GenerateRandomKey(64)
 	} else {
 		secret = []byte(config.Server.Secret)
 	}
