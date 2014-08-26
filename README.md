@@ -36,6 +36,8 @@ key:
 	allowoptions: true
 ```
 
+Arguments provided on the command line will override the configuration file. Keep in mind that `-ldap-ssl` and `-key-allow-options` work slightly different, in that they must be supplied to enable the functionality. Not providing them will not disable their respective functionality if explicitly enabled in the configuration file.
+
 ## Usage with AuthorizedKeysCommand
 
 The `AuthorizedKeysCommand` expects an executable that takes a single argument, which is the username to retrieve the keys for.  An example executable may look like:

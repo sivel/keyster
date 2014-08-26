@@ -429,82 +429,43 @@ func ParseConfig() Config {
 	if err == nil {
 		yaml.Unmarshal(text, &config)
 	}
+	if config.Server.Port == "" {
+		config.Server.Port = ":3000"
+	}
+	if config.Server.LogFile == "" {
+		config.Server.LogFile = "-"
+	}
+	if config.Mongo.URL == "" {
+		config.Mongo.URL = "mongodb://127.0.0.1:27017/keyster"
+	}
+	if config.Key.Duration == "" {
+		config.Key.Duration = "0"
+	}
 	return config
 }
 
 func main() {
-	var Port string
-	var Cert string
-	var Key string
-	var MongoURL string
-	var LDAPServer string
-	var LDAPBaseDN string
 	var LDAPSSL bool
-	var KeyDuration string
 	var KeyAllowOptions bool
-	var LogFile string
 	var logFile *os.File
 
 	config := ParseConfig()
-	var defaultPort string
-	if config.Server.Port != "" {
-		defaultPort = config.Server.Port
-	} else {
-		defaultPort = ":3000"
-	}
 
-	var defaultKeyDuration string
-	if config.Key.Duration != "" {
-		defaultKeyDuration = config.Key.Duration
-	} else {
-		defaultKeyDuration = "0"
-	}
-
-	var defaultLogFile string
-	if config.Server.LogFile != "" {
-		defaultLogFile = config.Server.LogFile
-	} else {
-		defaultLogFile = "-"
-	}
-
-	var defaultMongoURL string
-	if config.Mongo.URL != "" {
-		defaultMongoURL = config.Mongo.URL
-	} else {
-		defaultMongoURL = "mongodb://127.0.0.1:27017/keyster"
-	}
-
-	flag.StringVar(&Port, "port", defaultPort, "HOST:PORT to listen on, HOST not required to listen on all addresses")
-	flag.StringVar(&Cert, "cert", "", "SSL cert file path. This option with 'key' enables SSL communication")
-	flag.StringVar(&Key, "key", "", "SSL key file path. This option with 'cert' enables SSL communication")
-	flag.StringVar(&LogFile, "log-file", defaultLogFile, "Log file path. Use - for stdout")
-	flag.StringVar(&MongoURL, "mongo-url", defaultMongoURL, "MongoDB Connection String. See http://docs.mongodb.org/manual/reference/connection-string/")
-	flag.StringVar(&LDAPServer, "ldap-server", "", "LDAP server HOST:PORT")
-	flag.StringVar(&LDAPBaseDN, "ldap-base-dn", "", "Base DN of users")
+	flag.StringVar(&config.Server.Port, "port", config.Server.Port, "HOST:PORT to listen on, HOST not required to listen on all addresses")
+	flag.StringVar(&config.Server.Cert, "cert", config.Server.Cert, "SSL cert file path. This option with 'key' enables SSL communication")
+	flag.StringVar(&config.Server.Key, "key", config.Server.Key, "SSL key file path. This option with 'cert' enables SSL communication")
+	flag.StringVar(&config.Server.LogFile, "log-file", config.Server.LogFile, "Log file path. Use - for stdout")
+	flag.StringVar(&config.Mongo.URL, "mongo-url", config.Mongo.URL, "MongoDB Connection String. See http://docs.mongodb.org/manual/reference/connection-string/")
+	flag.StringVar(&config.LDAP.Server, "ldap-server", config.LDAP.Server, "LDAP server HOST:PORT")
+	flag.StringVar(&config.LDAP.BaseDN, "ldap-base-dn", config.LDAP.BaseDN, "Base DN of users")
 	flag.BoolVar(&LDAPSSL, "ldap-ssl", false, "Use SSL or TLS for connectivity to the LDAP server")
-	flag.StringVar(&KeyDuration, "key-duration", defaultKeyDuration, "Duration of key validity. 0 disables expiration. See http://golang.org/pkg/time/#ParseDuration")
+	flag.StringVar(&config.Key.Duration, "key-duration", config.Key.Duration, "Duration of key validity. 0 disables expiration. See http://golang.org/pkg/time/#ParseDuration")
 	flag.BoolVar(&KeyAllowOptions, "key-allow-options", false, "Whether keys are allowed to contain options")
 	flag.Parse()
 
-	config.Server.Port = Port
-	if Cert != "" {
-		config.Server.Cert = Cert
-	}
-	if Key != "" {
-		config.Server.Key = Key
-	}
-	config.Server.LogFile = LogFile
-	if LDAPServer != "" {
-		config.LDAP.Server = LDAPServer
-	}
-	config.Mongo.URL = MongoURL
-	if LDAPBaseDN != "" {
-		config.LDAP.BaseDN = LDAPBaseDN
-	}
 	if config.LDAP.SSL != LDAPSSL && LDAPSSL == true {
 		config.LDAP.SSL = LDAPSSL
 	}
-	config.Key.Duration = KeyDuration
 	if config.Key.AllowOptions != KeyAllowOptions && KeyAllowOptions == true {
 		config.Key.AllowOptions = KeyAllowOptions
 	}
