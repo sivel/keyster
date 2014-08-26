@@ -12,6 +12,30 @@ An SSH authorized key store for use with OpenSSH AuthorizedKeysCommand
 ./keyster -ldap-server ldap.itd.umich.edu:389 -ldap-base-dn dc=umich,dc=edu -key-allow-options -key-duration 720h
 ```
 
+## Configuration File
+
+The optional configuration file is located at `/etc/keyster.yaml`
+
+Full configuration example:
+
+```
+server:
+	port: ":8000"
+	cert: /path/to/ssl.crt
+	key: /path/to/ssl.key
+	logfile: /var/log/keyster.log
+	secret: "\xd6+Ke\xf9\xf2}a\xa6\xab\xc1su>P\x03\xea\x7f\x18U\xbe\x0b\x8b\x04"
+mongo:
+	url: "mongodb://127.0.0.1:27017/keyster"
+ldap:
+	server: "ldap.itd.umich.edu:636"
+	basedn: "dc=umich,dc=edu"
+	ssl: true
+key:
+	duration: 720h
+	allowoptions: true
+```
+
 ## Usage with AuthorizedKeysCommand
 
 The `AuthorizedKeysCommand` expects an executable that takes a single argument, which is the username to retrieve the keys for.  An example executable may look like:

@@ -20,6 +20,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
@@ -30,6 +31,7 @@ import (
 
 	"labix.org/v2/mgo"
 	"labix.org/v2/mgo/bson"
+	"launchpad.net/goyaml"
 
 	"crypto/md5"
 
@@ -44,6 +46,28 @@ import (
 	"github.com/unrolled/render"
 	"github.com/vanackere/ldap"
 )
+
+type Config struct {
+	Server struct {
+		Port    string
+		Cert    string
+		Key     string
+		LogFile string
+		Secret  string
+	}
+	Mongo struct {
+		URL string
+	}
+	LDAP struct {
+		BaseDN string
+		Server string
+		SSL    bool
+	}
+	Key struct {
+		Duration     string
+		AllowOptions bool
+	}
+}
 
 func KeyFingerprint(key []byte) string {
 	var fingerprint []string
@@ -135,7 +159,7 @@ func (h *Handler) GetCurrentUserKeys(username string, displayKeyOptions bool) []
 	mongo := h.Mongo.Copy()
 	defer mongo.Close()
 
-	c := mongo.DB("keyster").C("keys")
+	c := mongo.DB("").C("keys")
 
 	var keys []UserKey
 	var keysOut []string
@@ -312,7 +336,7 @@ func (h *Handler) UserPostHandler(w http.ResponseWriter, req *http.Request) {
 	}*/
 
 	mongo := h.Mongo.Copy()
-	c := mongo.DB("keyster").C("keys")
+	c := mongo.DB("").C("keys")
 	defer mongo.Close()
 	if len(userForm.Keys) > 0 {
 		for _, value := range strings.Split(userForm.Keys, "\n") {
@@ -399,10 +423,20 @@ func (h *Handler) LogoutHandler(w http.ResponseWriter, req *http.Request) {
 	http.Redirect(w, req, url.String(), 302)
 }
 
+func ParseConfig() Config {
+	var config Config
+	text, err := ioutil.ReadFile("/etc/keyster.yaml")
+	if err == nil {
+		goyaml.Unmarshal(text, &config)
+	}
+	return config
+}
+
 func main() {
 	var Port string
 	var Cert string
 	var Key string
+	var MongoURL string
 	var LDAPServer string
 	var LDAPBaseDN string
 	var LDAPSSL bool
@@ -411,32 +445,94 @@ func main() {
 	var LogFile string
 	var logFile *os.File
 
-	mongo, err := mgo.Dial("127.0.0.1")
+	config := ParseConfig()
+	var defaultPort string
+	if config.Server.Port != "" {
+		defaultPort = config.Server.Port
+	} else {
+		defaultPort = ":3000"
+	}
+
+	var defaultKeyDuration string
+	if config.Key.Duration != "" {
+		defaultKeyDuration = config.Key.Duration
+	} else {
+		defaultKeyDuration = "0"
+	}
+
+	var defaultLogFile string
+	if config.Server.LogFile != "" {
+		defaultLogFile = config.Server.LogFile
+	} else {
+		defaultLogFile = "-"
+	}
+
+	var defaultMongoURL string
+	if config.Mongo.URL != "" {
+		defaultMongoURL = config.Mongo.URL
+	} else {
+		defaultMongoURL = "mongodb://127.0.0.1:27017/keyster"
+	}
+
+	flag.StringVar(&Port, "port", defaultPort, "HOST:PORT to listen on, HOST not required to listen on all addresses")
+	flag.StringVar(&Cert, "cert", "", "SSL cert file path. This option with 'key' enables SSL communication")
+	flag.StringVar(&Key, "key", "", "SSL key file path. This option with 'cert' enables SSL communication")
+	flag.StringVar(&LogFile, "log-file", defaultLogFile, "Log file path. Use - for stdout")
+	flag.StringVar(&MongoURL, "mongo-url", defaultMongoURL, "MongoDB Connection String. See http://docs.mongodb.org/manual/reference/connection-string/")
+	flag.StringVar(&LDAPServer, "ldap-server", "", "LDAP server HOST:PORT")
+	flag.StringVar(&LDAPBaseDN, "ldap-base-dn", "", "Base DN of users")
+	flag.BoolVar(&LDAPSSL, "ldap-ssl", false, "Use SSL or TLS for connectivity to the LDAP server")
+	flag.StringVar(&KeyDuration, "key-duration", defaultKeyDuration, "Duration of key validity. 0 disables expiration. See http://golang.org/pkg/time/#ParseDuration")
+	flag.BoolVar(&KeyAllowOptions, "key-allow-options", false, "Whether keys are allowed to contain options")
+	flag.Parse()
+
+	config.Server.Port = Port
+	if Cert != "" {
+		config.Server.Cert = Cert
+	}
+	if Key != "" {
+		config.Server.Key = Key
+	}
+	config.Server.LogFile = LogFile
+	if LDAPServer != "" {
+		config.LDAP.Server = LDAPServer
+	}
+	config.Mongo.URL = MongoURL
+	if LDAPBaseDN != "" {
+		config.LDAP.BaseDN = LDAPBaseDN
+	}
+	if config.LDAP.SSL != LDAPSSL && LDAPSSL == true {
+		config.LDAP.SSL = LDAPSSL
+	}
+	config.Key.Duration = KeyDuration
+	if config.Key.AllowOptions != KeyAllowOptions && KeyAllowOptions == true {
+		config.Key.AllowOptions = KeyAllowOptions
+	}
+
+	router := mux.NewRouter().StrictSlash(true)
+
+	var secret []byte
+	if config.Server.Secret == "" {
+		file, _ := os.Open("/dev/urandom")
+		secret = make([]byte, 24)
+		file.Read(secret)
+		file.Close()
+	} else {
+		secret = []byte(config.Server.Secret)
+	}
+
+	keyDuration, err := time.ParseDuration(config.Key.Duration)
+	if err != nil {
+		log.Fatalf("%s could not be parsed as a time duration. See http://golang.org/pkg/time/#ParseDuration", config.Key.Duration)
+	}
+
+	mongo, err := mgo.Dial(config.Mongo.URL)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	flag.StringVar(&Port, "port", ":3000", "HOST:PORT to listen on, HOST not required to listen on all addresses")
-	flag.StringVar(&Cert, "cert", "", "SSL cert file path. This option with 'key' enables SSL communication")
-	flag.StringVar(&Key, "key", "", "SSL key file path. This option with 'cert' enables SSL communication")
-	flag.StringVar(&LDAPServer, "ldap-server", "", "LDAP server HOST:PORT")
-	flag.StringVar(&LDAPBaseDN, "ldap-base-dn", "", "Base DN of users")
-	flag.BoolVar(&LDAPSSL, "ldap-ssl", false, "Use SSL or TLS for connectivity to the LDAP server")
-	flag.StringVar(&KeyDuration, "key-duration", "0", "Duration of key validity. 0 disables expiration. See http://golang.org/pkg/time/#ParseDuration")
-	flag.BoolVar(&KeyAllowOptions, "key-allow-options", false, "Whether keys are allowed to contain options")
-	flag.StringVar(&LogFile, "log-file", "-", "Log file path. Use - for stdout")
-	flag.Parse()
-
-	router := mux.NewRouter().StrictSlash(true)
-
-	file, _ := os.Open("/dev/urandom")
-	secret := make([]byte, 24)
-	file.Read(secret)
-	file.Close()
-
-	keyDuration, err := time.ParseDuration(KeyDuration)
-	if err != nil {
-		log.Fatalf("%s could not be parsed as a time duration. See http://golang.org/pkg/time/#ParseDuration", KeyDuration)
+	if mongo.DB("").Name == "test" {
+		log.Fatalf("The provided Mongo Connection String URL does not appear to have a database name: %s", config.Mongo.URL)
 	}
 
 	h := Handler{
@@ -456,16 +552,16 @@ func main() {
 	})
 
 	h.Render = r
-	h.LDAP.Server = LDAPServer
-	h.LDAP.BaseDN = LDAPBaseDN
-	h.LDAP.SSL = LDAPSSL
+	h.LDAP.Server = config.LDAP.Server
+	h.LDAP.BaseDN = config.LDAP.BaseDN
+	h.LDAP.SSL = config.LDAP.SSL
 	h.Key.Duration = keyDuration
-	h.Key.AllowOptions = KeyAllowOptions
+	h.Key.AllowOptions = config.Key.AllowOptions
 
-	if LogFile == "-" {
+	if config.Server.LogFile == "-" {
 		logFile = os.Stdout
 	} else {
-		absPath, err := filepath.Abs(LogFile)
+		absPath, err := filepath.Abs(config.Server.LogFile)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -487,9 +583,9 @@ func main() {
 
 	http.Handle("/", loggingHandler)
 
-	if len(Cert) == 0 || len(Key) == 0 {
-		log.Fatal(http.ListenAndServe(Port, loggingHandler))
+	if len(config.Server.Cert) == 0 || len(config.Server.Key) == 0 {
+		log.Fatal(http.ListenAndServe(config.Server.Port, loggingHandler))
 	} else {
-		log.Fatal(http.ListenAndServeTLS(Port, Cert, Key, loggingHandler))
+		log.Fatal(http.ListenAndServeTLS(config.Server.Port, config.Server.Cert, config.Server.Key, loggingHandler))
 	}
 }
