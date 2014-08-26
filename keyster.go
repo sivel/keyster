@@ -31,7 +31,6 @@ import (
 
 	"labix.org/v2/mgo"
 	"labix.org/v2/mgo/bson"
-	"launchpad.net/goyaml"
 
 	"crypto/md5"
 
@@ -45,6 +44,7 @@ import (
 	"github.com/mholt/binding"
 	"github.com/unrolled/render"
 	"github.com/vanackere/ldap"
+	"gopkg.in/yaml.v1"
 )
 
 type Config struct {
@@ -427,7 +427,7 @@ func ParseConfig() Config {
 	var config Config
 	text, err := ioutil.ReadFile("/etc/keyster.yaml")
 	if err == nil {
-		goyaml.Unmarshal(text, &config)
+		yaml.Unmarshal(text, &config)
 	}
 	return config
 }
